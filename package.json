@@ -1,0 +1,63 @@
+{
+  "name": "@stricahq/ouroboros-network-js",
+  "version": "1.0.0",
+  "description": "Javascript implementation of Cardano Ouroboros networking protocol",
+  "main": "dist/index.js",
+  "keywords": [
+    "cardano",
+    "strica",
+    "Ouroboros network"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/StricaHQ/ouroboros-network-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/StricaHQ/ouroboros-network-js/issues"
+  },
+  "homepage": "https://github.com/StricaHQ/ouroboros-network-js#readme",
+  "scripts": {
+    "docs": "rm -rf docs && typedoc --plugin typedoc-plugin-missing-exports",
+    "build": "rm -rf dist && tsc",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts'",
+    "test": "ts-mocha tests/**/*.spec.ts"
+  },
+  "author": "Strica",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@stricahq/buffer-list": "^1.0.0",
+    "@stricahq/cardano-codec": "^1.0.0",
+    "@stricahq/cbors": "1.0.2",
+    "bignumber.js": "^9.1.1",
+    "javascript-state-machine": "^3.1.0",
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.5",
+    "@types/lodash": "^4.14.195",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^20.4.1",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "chai": "^4.3.7",
+    "deep-eql": "^4.1.3",
+    "eslint": "^8.44.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-import": "^2.27.5",
+    "eslint-plugin-prettier": "^4.2.1",
+    "mocha": "^10.2.0",
+    "prettier": "^3.0.0",
+    "ts-mocha": "^10.0.0",
+    "typedoc": "^0.24.8",
+    "typedoc-plugin-missing-exports": "^2.0.0",
+    "typescript": "^5.1.6"
+  },
+  "files": [
+    "dist/**/*",
+    "LICENSE",
+    "README.md",
+    "package.json"
+  ]
+}
