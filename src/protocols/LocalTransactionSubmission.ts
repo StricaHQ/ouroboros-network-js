@@ -2,7 +2,7 @@
 
 import * as cbors from "@stricahq/cbors";
 import { Socket } from "net";
-import { LocalTransactionSubmissionResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import { types as CodecTypes } from "@stricahq/cardano-codec";
 import EventEmitter from "events";
 import Stream from "stream";
 import PacketStreamer from "../PacketStreamer";
@@ -11,7 +11,7 @@ import localTransactionSubmissionResponse from "../parser/localTransactionSubmis
 const LOCAL_TX_SUBMISSION = Buffer.from([0x00, 0x06]); // included protocol id
 
 export declare interface LocalTransactionSubmission {
-  on(event: "data", listener: (data: LocalTransactionSubmissionResponse) => void): this;
+  on(event: "data", listener: (data: CodecTypes.OuroborosTypes.LocalTransactionSubmissionResponse) => void): this;
   on(event: "error", listener: (error: Error) => void): this;
 }
 

@@ -36,7 +36,7 @@ export const createProtocolPacket = function (buffPayload: Buffer, PROTOCOL_ID: 
 
 export const makeHandshakeMsg = function (protocolId: number, networkMagic: number) {
   const map = new Map();
-  map.set(protocolId, networkMagic);
+  map.set(protocolId, [networkMagic, false]);
   const buffPayload = cbors.Encoder.encode([0, map]);
   const packet = createProtocolPacket(buffPayload, HAND_SHAKE);
   return packet;

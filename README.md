@@ -12,6 +12,9 @@ Ouroboros network library written in typescript with nodejs streaming module. Th
 ✅ Stable multiplexer and de-multiplexer
 ✅ Modular and scalable design
 
+## Supported Protocol ID
+32784
+
 ## Currently Implemented Mini Protocols
 - Local Chain Sync
 - Local Transaction Submission

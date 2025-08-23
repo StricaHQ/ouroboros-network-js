@@ -27,7 +27,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@stricahq/buffer-list": "^1.0.0",
-    "@stricahq/cardano-codec": "^1.0.0",
+    "@stricahq/cardano-codec": "^2.0.4",
     "@stricahq/cbors": "1.0.2",
     "bignumber.js": "^9.1.1",
     "javascript-state-machine": "^3.1.0",
