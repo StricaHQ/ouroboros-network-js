@@ -78,8 +78,9 @@ describe("local transaction submission responses", () => {
   it("rejected hands over the plain decoded reason", () => {
     const reason = new Map([[1, [Buffer.from("aa", "hex"), 7n ** 30n]]]);
     const res = localTransactionSubmissionResponse(tree([2, reason]));
-    expect(res.rejectionMessage).toBeInstanceOf(Map);
-    const [bytes, big] = res.rejectionMessage.get(1);
+    const decoded = res.rejectionMessage as Map<number, [Uint8Array, bigint]>;
+    expect(decoded).toBeInstanceOf(Map);
+    const [bytes, big] = decoded.get(1)!;
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(Buffer.from(bytes).toString("hex")).toBe("aa");
     expect(big).toBe(7n ** 30n);

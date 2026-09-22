@@ -116,7 +116,7 @@ Every error closes the connection, so `error` is always followed by `disconnect`
 
 ## Mini protocols
 
-The mini protocols hang off the client as `client.NodeToClientChainSync`, `client.LocalTxMonitor` and `client.LocalTransactionSubmission`. Each one is an event emitter with the request methods listed below. Whatever the node sends back comes out as a `data` event, decoded into the shapes in the tables. Points and tips are `{ slot, hash }` with the hash in hex, and the origin is the empty point `{}`.
+The mini protocols hang off the client as `client.NodeToClientChainSync`, `client.LocalTxMonitor` and `client.LocalTransactionSubmission`. Each one is an event emitter with the request methods listed below. Whatever the node sends back comes out as a `data` event, decoded into the shapes in the tables and exported as the `NodeToClientChainSyncResponse`, `LocalTxMonitorResponse` and `LocalTransactionSubmissionResponse` types. Points and tips are `{ slot, hash }` with the hash in hex, and the origin is the empty point `{}`. They are the `Point` and `Tip` types.
 
 ### States and agency
 
@@ -191,10 +191,10 @@ try {
 
 `client.LocalTransactionSubmission`
 
-| Method                           | Sends                                                                                                                                                                                                    |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `submitTransaction(era, txCbor)` | The transaction's CBOR bytes tagged with its era index (`6` for Conway). Answered with `{ success: true }` or `{ rejectionMessage }`, the node's reason decoded from CBOR. Its shape depends on the era. |
-| `done()`                         | The end of the protocol.                                                                                                                                                                                 |
+| Method                           | Sends                                                                                                                                                                                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `submitTransaction(era, txCbor)` | The transaction's CBOR bytes tagged with its era index (`6` for Conway). Answered with `{ success: true }` or `{ rejectionMessage }`, the node's reason decoded from CBOR. Its shape depends on the era, so it is typed `unknown`. |
+| `done()`                         | The end of the protocol.                                                                                                                                                                                                           |
 
 | State    | Turn   | Next                                                    |
 | -------- | ------ | ------------------------------------------------------- |

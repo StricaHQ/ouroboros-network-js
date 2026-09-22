@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import type { LocalTxMonitorResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import type { LocalTxMonitorResponse } from "../types";
 import MiniProtocol, { type Transport } from "./MiniProtocol";
 import localTxMonitorResponseParser from "../parser/localTxMonitor";
 import type { ProtocolSpec } from "../stateMachine";

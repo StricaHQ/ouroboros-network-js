@@ -1,6 +1,6 @@
 import { CborTag } from "@stricahq/cbors";
 import { Readable } from "node:stream";
-import type { LocalTransactionSubmissionResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import type { LocalTransactionSubmissionResponse } from "../types";
 import MiniProtocol, { type Transport } from "./MiniProtocol";
 import localTransactionSubmissionResponse from "../parser/localTransactionSubmission";
 import type { ProtocolSpec } from "../stateMachine";

@@ -1,8 +1,5 @@
 import { Readable } from "node:stream";
-import type {
-  NodeToClientChainSyncResponse,
-  Tip,
-} from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import type { NodeToClientChainSyncResponse, Tip } from "../types";
 import MiniProtocol, { type Transport } from "./MiniProtocol";
 import chainSyncResponseParser from "../parser/chainSync";
 import type { ProtocolSpec } from "../stateMachine";

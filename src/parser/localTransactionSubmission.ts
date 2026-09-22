@@ -1,5 +1,5 @@
 import type { CborNode } from "@stricahq/cbors";
-import type { LocalTransactionSubmissionResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import type { LocalTransactionSubmissionResponse } from "../types";
 
 export const localTransactionSubmissionResponse = (
   payload: CborNode

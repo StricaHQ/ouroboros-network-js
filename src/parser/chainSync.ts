@@ -1,9 +1,5 @@
 import type { CborNode } from "@stricahq/cbors";
-import type {
-  NodeToClientChainSyncResponse,
-  Point,
-  Tip,
-} from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import type { NodeToClientChainSyncResponse, Point, Tip } from "../types";
 import { toHex, unwrapCborInCbor } from "../utils/utils";
 
 // point = [] (origin) / [slot, hash]

@@ -1,5 +1,5 @@
 import type { CborNode } from "@stricahq/cbors";
-import type { LocalTxMonitorResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import type { LocalTxMonitorResponse } from "../types";
 import { unwrapCborInCbor } from "../utils/utils";
 
 export const localTxMonitorResponse = (payload: CborNode): LocalTxMonitorResponse => {

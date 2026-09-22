@@ -41,7 +41,6 @@
   "author": "Strica",
   "license": "Apache-2.0",
   "dependencies": {
-    "@stricahq/cardano-codec": "^2.0.4",
     "@stricahq/cbors": "2.1.0"
   },
   "devDependencies": {
