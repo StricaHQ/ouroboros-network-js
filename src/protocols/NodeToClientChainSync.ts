@@ -1,45 +1,60 @@
-import * as cbors from "@stricahq/cbors";
-import { Socket } from "net";
-import {
+import { Readable } from "node:stream";
+import type {
   NodeToClientChainSyncResponse,
   Tip,
 } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
-import EventEmitter from "events";
-import Stream from "stream";
-import PacketStreamer from "../PacketStreamer";
+import MiniProtocol, { type Transport } from "./MiniProtocol";
 import chainSyncResponseParser from "../parser/chainSync";
+import type { ProtocolSpec } from "../stateMachine";
 
-const CHAIN_SYNC = Buffer.from([0x00, 0x05]); // included protocol id
+const CHAIN_SYNC = Buffer.from([0x00, 0x05]);
 
-export declare interface NodeToClientChainSync {
-  on(event: "data", listener: (data: NodeToClientChainSyncResponse) => void): this;
-  on(event: "error", listener: (error: Error) => void): this;
-}
+export type NodeToClientChainSyncState =
+  "StIdle" | "StCanAwait" | "StMustReply" | "StIntersect" | "StDone";
 
-// eslint-disable-next-line no-redeclare
-export class NodeToClientChainSync extends EventEmitter {
-  private NodeToClientChainSyncEncoderStream;
+export type NodeToClientChainSyncMessage =
+  | "MsgRequestNext"
+  | "MsgAwaitReply"
+  | "MsgRollForward"
+  | "MsgRollBackward"
+  | "MsgFindIntersect"
+  | "MsgIntersectFound"
+  | "MsgIntersectNotFound"
+  | "MsgDone";
 
-  constructor(socket: Socket, NodeToClientChainSyncDecoderStream: Stream.Readable) {
-    super();
-    this.NodeToClientChainSyncEncoderStream = new Stream.Readable({
-      read() {},
-    });
+/** The chain sync state machine. */
+export const nodeToClientChainSyncProtocol: ProtocolSpec<
+  NodeToClientChainSyncState,
+  NodeToClientChainSyncMessage
+> = {
+  name: "NodeToClientChainSync",
+  init: "StIdle",
+  agency: {
+    StIdle: "client",
+    StCanAwait: "server",
+    StMustReply: "server",
+    StIntersect: "server",
+    StDone: "nobody",
+  },
+  messages: {
+    MsgRequestNext: { tag: 0, from: "StIdle", to: "StCanAwait" },
+    MsgAwaitReply: { tag: 1, from: "StCanAwait", to: "StMustReply" },
+    MsgRollForward: { tag: 2, from: ["StCanAwait", "StMustReply"], to: "StIdle" },
+    MsgRollBackward: { tag: 3, from: ["StCanAwait", "StMustReply"], to: "StIdle" },
+    MsgFindIntersect: { tag: 4, from: "StIdle", to: "StIntersect" },
+    MsgIntersectFound: { tag: 5, from: "StIntersect", to: "StIdle" },
+    MsgIntersectNotFound: { tag: 6, from: "StIntersect", to: "StIdle" },
+    MsgDone: { tag: 7, from: "StIdle", to: "StDone" },
+  },
+};
 
-    const NodeToClientChainSyncStreamer = new PacketStreamer(CHAIN_SYNC);
-    this.NodeToClientChainSyncEncoderStream.pipe(NodeToClientChainSyncStreamer);
-
-    NodeToClientChainSyncStreamer.on("data", (packet: Buffer) => {
-      socket.write(packet);
-    });
-
-    const nodeToClientChainSyncDecoder = new cbors.Decoder();
-    NodeToClientChainSyncDecoderStream.pipe(nodeToClientChainSyncDecoder);
-
-    nodeToClientChainSyncDecoder.on("data", (data: any) => {
-      const response = chainSyncResponseParser(data.value);
-      this.emit("data", response);
-    });
+export class NodeToClientChainSync extends MiniProtocol<
+  NodeToClientChainSyncState,
+  NodeToClientChainSyncMessage,
+  NodeToClientChainSyncResponse
+> {
+  constructor(transport: Transport, incoming: Readable) {
+    super(nodeToClientChainSyncProtocol, CHAIN_SYNC, transport, incoming, chainSyncResponseParser);
   }
 
   findIntersect = (points: Array<Tip>) => {
@@ -47,21 +62,15 @@ export class NodeToClientChainSync extends EventEmitter {
       points.length > 0
         ? points.map((point): [number, Buffer] => [point.slot, Buffer.from(point.hash, "hex")])
         : [[]];
-    const payload = [4, intersectPoints];
-    const payloadBuffer = cbors.Encoder.encode(payload);
-    this.NodeToClientChainSyncEncoderStream.push(payloadBuffer);
+    this.send("MsgFindIntersect", [4, intersectPoints]);
   };
 
   requestNext = () => {
-    const payload = [0];
-    const payloadBuffer = cbors.Encoder.encode(payload);
-    this.NodeToClientChainSyncEncoderStream.push(payloadBuffer);
+    this.send("MsgRequestNext", [0]);
   };
 
   done = () => {
-    const payload = [7];
-    const payloadBuffer = cbors.Encoder.encode(payload);
-    this.NodeToClientChainSyncEncoderStream.push(payloadBuffer);
+    this.send("MsgDone", [7]);
   };
 }
 

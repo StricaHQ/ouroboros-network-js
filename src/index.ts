@@ -1,2 +1,8 @@
-// eslint-disable-next-line import/prefer-default-export
 export { OuroborosClient } from "./OuroborosClient";
+export { SduReadTimeoutError, DEFAULT_SDU_TIMEOUT } from "./DeMux";
+export { ProtocolViolationError, type Agency } from "./stateMachine";
+export { HandshakeRefusedError } from "./protocols/Handshake";
+export type { NodeToClientChainSyncState } from "./protocols/NodeToClientChainSync";
+export type { LocalTxMonitorState } from "./protocols/LocalTxMonitor";
+export type { LocalTransactionSubmissionState } from "./protocols/LocalTransactionSubmission";
+export type { Options } from "./types";

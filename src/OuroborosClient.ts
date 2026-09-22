@@ -1,24 +1,27 @@
-import { Socket } from "net";
-import StateMachine from "javascript-state-machine";
-import EventEmitter from "events";
-import stream from "stream";
-import { makeHandshakeMsg } from "./protocol";
-import DeMux from "./DeMux";
+import { Socket } from "node:net";
+import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
+import DeMux, { type Segment } from "./DeMux";
+import type { Transport } from "./protocols/MiniProtocol";
+import Handshake, { HandshakeRefusedError } from "./protocols/Handshake";
 import NodeToClientChainSync from "./protocols/NodeToClientChainSync";
 import LocalTxMonitor from "./protocols/LocalTxMonitor";
 import LocalTransactionSubmission from "./protocols/LocalTransactionSubmission";
-import { Options } from "./types";
+import type { Options } from "./types";
 
-export declare interface OuroborosClient {
-  on(event: "connect", listener: () => void): this;
-  on(event: "error", listener: (error: Error) => void): this;
-  on(event: "disconnect", listener: () => void): this;
-}
-// eslint-disable-next-line no-redeclare
-export class OuroborosClient extends EventEmitter {
+type OuroborosClientEvents = {
+  connect: [];
+  error: [Error];
+  disconnect: [];
+};
+
+type Status = "idle" | "connecting" | "connected" | "closed";
+
+export class OuroborosClient extends EventEmitter<OuroborosClientEvents> {
   private options: Options;
   private socket: Socket;
-  private fsm;
+  private status: Status = "idle";
+  private handshake: Handshake;
   NodeToClientChainSync;
   LocalTxMonitor;
   LocalTransactionSubmission;
@@ -27,99 +30,96 @@ export class OuroborosClient extends EventEmitter {
     super();
     this.options = options;
     this.socket = new Socket({});
-    const socketStream = new stream.Readable({
-      read() {},
-    });
-    const NodeToClientChainSyncDecoderStream = new stream.Readable({
-      read() {},
+
+    const incoming = new Map<number, Readable>();
+    const inbound = (protocol: number) => {
+      const stream = new Readable({ read() {} });
+      incoming.set(protocol, stream);
+      return stream;
+    };
+
+    const link = (ready: () => boolean): Transport => ({
+      get ready() {
+        return ready();
+      },
+      write: (packet) => {
+        this.socket.write(packet);
+      },
+      abort: () => this.close(),
     });
 
-    const LocalTxMonitorDecoderStream = new stream.Readable({
-      read() {},
-    });
-
-    const LocalTransactionSubmissionDecoderStream = new stream.Readable({
-      read() {},
-    });
-
-    const deMultiPlexer = new DeMux();
-
-    this.fsm = new StateMachine({
-      init: "OFF",
-      transitions: [
-        { name: "connect", from: "OFF", to: "ON" },
-        { name: "disconnect", from: ["ON", "OFF", "Idle"], to: "OFF" },
-        { name: "query", from: ["ON", "Idle"], to: "Idle" },
-      ],
+    const deMultiPlexer = new DeMux({ sduTimeout: this.options.sduTimeout });
+    this.socket.pipe(deMultiPlexer);
+    deMultiPlexer.on("error", (error: Error) => this.close(error));
+    deMultiPlexer.on("data", (segment: Segment) => {
+      const stream = incoming.get(segment.protocol);
+      if (stream === undefined) {
+        return this.close(
+          new Error(`mux: a segment for mini protocol ${segment.protocol}, which is not in use`)
+        );
+      }
+      stream.push(segment.bytes);
     });
 
     this.socket.on("error", (error) => {
       this.emit("error", error);
     });
 
-    this.socket.on("end", () => {
-      this.fsm.disconnect();
+    this.socket.on("close", () => {
+      this.status = "closed";
+      deMultiPlexer.destroy(); // drops a pending segment and its clock
       this.emit("disconnect");
     });
 
     this.socket.on("connect", () => {
-      const packet = makeHandshakeMsg(this.options.protocolId, this.options.protocolMagic);
-      this.socket.write(packet);
+      this.handshake.proposeVersions(this.options.protocolId, this.options.protocolMagic);
     });
 
-    this.socket.on("data", (data) => {
-      if (this.fsm.is("OFF")) {
-        this.fsm.connect();
+    // the handshake runs as soon as the socket is up, the others once it is accepted
+    this.handshake = new Handshake(
+      link(() => true),
+      inbound(0)
+    );
+    this.handshake.on("data", (reply) => {
+      if (this.status !== "connecting") return; // disconnected while waiting for the answer
+      if ("accepted" in reply) {
+        this.status = "connected";
         this.emit("connect");
+      } else if ("refused" in reply) {
+        this.close(new HandshakeRefusedError(reply.refused));
       } else {
-        socketStream.push(data);
+        const versions = [...reply.versions.keys()];
+        this.close(new HandshakeRefusedError({ reason: "QueryReply", versions }));
       }
     });
-
-    socketStream.pipe(deMultiPlexer);
-    deMultiPlexer.on("data", (data: { protocol: number; bytes: Buffer }) => {
-      switch (data.protocol) {
-        case 5: {
-          NodeToClientChainSyncDecoderStream.push(data.bytes);
-          break;
-        }
-        case 6: {
-          LocalTransactionSubmissionDecoderStream.push(data.bytes);
-          break;
-        }
-        case 9: {
-          LocalTxMonitorDecoderStream.push(data.bytes);
-          return;
-        }
-        default: {
-          throw new Error("Protocol not supported");
-        }
-      }
+    // the protocol drops the connection itself after a fault of the node's
+    this.handshake.on("error", (error) => {
+      this.emit("error", error);
     });
 
-    this.NodeToClientChainSync = new NodeToClientChainSync(
-      this.socket,
-      NodeToClientChainSyncDecoderStream
-    );
-
-    this.LocalTxMonitor = new LocalTxMonitor(this.socket, LocalTxMonitorDecoderStream);
-
-    this.LocalTransactionSubmission = new LocalTransactionSubmission(
-      this.socket,
-      LocalTransactionSubmissionDecoderStream
-    );
+    const ready = () => this.status === "connected";
+    this.NodeToClientChainSync = new NodeToClientChainSync(link(ready), inbound(5));
+    this.LocalTransactionSubmission = new LocalTransactionSubmission(link(ready), inbound(6));
+    this.LocalTxMonitor = new LocalTxMonitor(link(ready), inbound(9));
   }
 
   connect(unixSocket: string): void;
-  // eslint-disable-next-line no-dupe-class-members
   connect(port: number): void;
-  // eslint-disable-next-line no-dupe-class-members
   connect(port: number, host: string): void;
-  // eslint-disable-next-line no-dupe-class-members
   connect(a: unknown, b?: unknown) {
+    if (this.status === "closed") {
+      throw new Error(
+        "connect() on a closed client: an OuroborosClient connects once, create a new one to connect again"
+      );
+    }
+    if (this.status !== "idle") {
+      throw new Error(`connect() while already ${this.status}`);
+    }
     if (a && !b) {
+      this.status = "connecting";
       this.socket.connect(a as number);
     } else if (typeof a === "number" && typeof b === "string") {
+      this.status = "connecting";
       this.socket.connect(a, b);
     } else {
       throw new Error("Invalid arguments");
@@ -127,7 +127,14 @@ export class OuroborosClient extends EventEmitter {
   }
 
   disconnect() {
+    this.status = "closed";
     this.socket.end();
+  }
+
+  private close(error?: Error) {
+    this.status = "closed";
+    this.socket.destroy();
+    if (error !== undefined) this.emit("error", error);
   }
 }
 

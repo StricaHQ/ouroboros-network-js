@@ -1,11 +1,12 @@
 {
   "entryPoints": ["src/index.ts"],
   "out": "docs",
+  "plugin": ["typedoc-plugin-missing-exports"],
   "includeVersion": true,
   "disableSources": true,
   "excludeProtected": true,
   "excludePrivate": true,
   "hideGenerator": true,
   "theme": "default",
-  "excludeExternals": true,
+  "excludeExternals": true
 }

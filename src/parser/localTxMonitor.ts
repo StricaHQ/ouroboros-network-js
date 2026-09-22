@@ -1,27 +1,23 @@
-import { LocalTxMonitorResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import type { CborNode } from "@stricahq/cbors";
+import type { LocalTxMonitorResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import { unwrapCborInCbor } from "../utils/utils";
 
-export const localTxMonitorResponse = (payload: any): LocalTxMonitorResponse => {
-  let result: LocalTxMonitorResponse;
-  switch (payload[0]) {
-    case 1:
-      result = {
-        await: true,
-      };
-      break;
+export const localTxMonitorResponse = (payload: CborNode): LocalTxMonitorResponse => {
+  switch (payload.at(0)?.toJS()) {
     case 2:
-      result = {
-        acquired: payload[1],
+      return {
+        acquired: payload.at(1)?.toJS(),
       };
-      break;
-    case 6:
-      result = {
-        nextTx: payload[1] ? payload[1][1].value : null,
+    case 6: {
+      // [6] once the snapshot is exhausted, otherwise [6, [era, #6.24(tx)]]
+      const tx = payload.at(1);
+      return {
+        nextTx: tx === undefined ? null : unwrapCborInCbor(tx.at(1)),
       };
-      break;
+    }
     default:
       throw new Error("Protocol is not implemented");
   }
-  return result;
 };
 
 export default localTxMonitorResponse;

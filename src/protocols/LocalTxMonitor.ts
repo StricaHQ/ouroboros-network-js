@@ -1,60 +1,77 @@
-import * as cbors from "@stricahq/cbors";
-import { Socket } from "net";
-import { LocalTxMonitorResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
-import EventEmitter from "events";
-import Stream from "stream";
-import PacketStreamer from "../PacketStreamer";
+import { Readable } from "node:stream";
+import type { LocalTxMonitorResponse } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import MiniProtocol, { type Transport } from "./MiniProtocol";
 import localTxMonitorResponseParser from "../parser/localTxMonitor";
+import type { ProtocolSpec } from "../stateMachine";
 
-const LOCAL_TX_MONITOR = Buffer.from([0x00, 0x09]); // included protocol id
+const LOCAL_TX_MONITOR = Buffer.from([0x00, 0x09]);
 
-export declare interface LocalTxMonitor {
-  on(event: "data", listener: (data: LocalTxMonitorResponse) => void): this;
-  on(event: "error", listener: (error: Error) => void): this;
-}
+export type LocalTxMonitorState = "StIdle" | "StAcquiring" | "StAcquired" | "StBusy" | "StDone";
 
-// eslint-disable-next-line no-redeclare
-export class LocalTxMonitor extends EventEmitter {
-  private LocalTxMonitorEncoderStream;
+export type LocalTxMonitorMessage =
+  | "MsgDone"
+  | "MsgAcquire"
+  | "MsgAcquired"
+  | "MsgAwaitAcquire"
+  | "MsgRelease"
+  | "MsgNextTx"
+  | "MsgReplyNextTx";
 
-  constructor(socket: Socket, LocalTxMonitorDecoderStream: Stream.Readable) {
-    super();
-    this.LocalTxMonitorEncoderStream = new Stream.Readable({
-      read() {},
-    });
+/**
+ * The local tx monitor state machine. `StBusy` covers `MsgNextTx` only: the
+ * other queries (`MsgHasTx`, `MsgGetSizes`, `MsgGetMeasures`) are not implemented.
+ */
+export const localTxMonitorProtocol: ProtocolSpec<LocalTxMonitorState, LocalTxMonitorMessage> = {
+  name: "LocalTxMonitor",
+  init: "StIdle",
+  agency: {
+    StIdle: "client",
+    StAcquiring: "server",
+    StAcquired: "client",
+    StBusy: "server",
+    StDone: "nobody",
+  },
+  messages: {
+    MsgDone: { tag: 0, from: "StIdle", to: "StDone" },
+    MsgAcquire: { tag: 1, from: "StIdle", to: "StAcquiring" },
+    MsgAwaitAcquire: { tag: 1, from: "StAcquired", to: "StAcquiring" },
+    MsgAcquired: { tag: 2, from: "StAcquiring", to: "StAcquired" },
+    MsgRelease: { tag: 3, from: "StAcquired", to: "StIdle" },
+    MsgNextTx: { tag: 5, from: "StAcquired", to: "StBusy" },
+    MsgReplyNextTx: { tag: 6, from: "StBusy", to: "StAcquired" },
+  },
+};
 
-    const LocalTxMonitorStreamer = new PacketStreamer(LOCAL_TX_MONITOR);
-    this.LocalTxMonitorEncoderStream.pipe(LocalTxMonitorStreamer);
-
-    LocalTxMonitorStreamer.on("data", (packet: Buffer) => {
-      socket.write(packet);
-    });
-
-    const localTxMonitorDecoder = new cbors.Decoder();
-    LocalTxMonitorDecoderStream.pipe(localTxMonitorDecoder);
-
-    localTxMonitorDecoder.on("data", (data: any) => {
-      const response = localTxMonitorResponseParser(data.value);
-      this.emit("data", response);
-    });
+export class LocalTxMonitor extends MiniProtocol<
+  LocalTxMonitorState,
+  LocalTxMonitorMessage,
+  LocalTxMonitorResponse
+> {
+  constructor(transport: Transport, incoming: Readable) {
+    super(
+      localTxMonitorProtocol,
+      LOCAL_TX_MONITOR,
+      transport,
+      incoming,
+      localTxMonitorResponseParser
+    );
   }
 
+  /** `MsgAcquire`, or `MsgAwaitAcquire` for the next snapshot while one is held: both are `[1]`. */
   acquireSnapshot = () => {
-    const payload = [1];
-    const payloadBuffer = cbors.Encoder.encode(payload);
-    this.LocalTxMonitorEncoderStream.push(payloadBuffer);
+    this.send(this.state === "StAcquired" ? "MsgAwaitAcquire" : "MsgAcquire", [1]);
   };
 
   requestNextTx = () => {
-    const payload = [5];
-    const payloadBuffer = cbors.Encoder.encode(payload);
-    this.LocalTxMonitorEncoderStream.push(payloadBuffer);
+    this.send("MsgNextTx", [5]);
+  };
+
+  release = () => {
+    this.send("MsgRelease", [3]);
   };
 
   done = () => {
-    const payload = [0];
-    const payloadBuffer = cbors.Encoder.encode(payload);
-    this.LocalTxMonitorEncoderStream.push(payloadBuffer);
+    this.send("MsgDone", [0]);
   };
 }
 

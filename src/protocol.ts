@@ -1,43 +1,23 @@
-import * as cbors from "@stricahq/cbors";
+// mux segment (SDU) header: 4 byte timestamp, 2 byte mini protocol id, 2 byte payload length
+const HEADER_LENGTH = 8;
 
-const HAND_SHAKE = Buffer.from([0x00, 0x00]); // mux
+// the mux timestamp: the low 32 bits of a monotonic microsecond clock
+const timestamp = () => Number((process.hrtime.bigint() / 1000n) & 0xffffffffn);
 
-const getMicroSeconds = function () {
-  const hrTime = process.hrtime();
-  return Math.floor(hrTime[0] * 1000000 + hrTime[1] / 1000);
-};
-
-const toBytesInt32 = function (num: number) {
-  const arr = new ArrayBuffer(4);
-  const view = new DataView(arr);
-  view.setUint32(0, num, false);
-  return arr;
-};
-
-const toBytesInt16 = function (num: number) {
-  const arr = new ArrayBuffer(2);
-  const view = new DataView(arr);
-  view.setUint16(0, num, false);
-  return arr;
-};
-
-export const createProtocolPacket = function (buffPayload: Buffer, PROTOCOL_ID: Buffer) {
-  const microSeconds = getMicroSeconds();
-  const buffTimestamp = Buffer.from(toBytesInt32(microSeconds));
-  const buffPayloadSize = Buffer.from(toBytesInt16(buffPayload.length));
-
-  const packet = Buffer.concat(
-    [buffTimestamp, PROTOCOL_ID, buffPayloadSize, buffPayload],
-    buffTimestamp.length + buffPayloadSize.length + buffPayload.length + PROTOCOL_ID.length
-  );
-
+export const createProtocolPacket = function (payload: Uint8Array, PROTOCOL_ID: Buffer) {
+  const packet = Buffer.allocUnsafe(HEADER_LENGTH + payload.length);
+  packet.writeUInt32BE(timestamp(), 0);
+  packet.writeUInt16BE(PROTOCOL_ID.readUInt16BE(0), 4);
+  packet.writeUInt16BE(payload.length, 6);
+  packet.set(payload, HEADER_LENGTH);
   return packet;
 };
 
-export const makeHandshakeMsg = function (protocolId: number, networkMagic: number) {
-  const map = new Map();
-  map.set(protocolId, [networkMagic, false]);
-  const buffPayload = cbors.Encoder.encode([0, map]);
-  const packet = createProtocolPacket(buffPayload, HAND_SHAKE);
-  return packet;
-};
+/**
+ * `MsgProposeVersions` offering one node to client version:
+ * `[0, {version: [networkMagic, query]}]`, never querying.
+ */
+export const versionProposal = (version: number, networkMagic: number) => [
+  0,
+  new Map([[version, [networkMagic, false]]]),
+];

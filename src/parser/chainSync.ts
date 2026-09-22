@@ -1,111 +1,75 @@
-import {
+import type { CborNode } from "@stricahq/cbors";
+import type {
   NodeToClientChainSyncResponse,
   Point,
   Tip,
 } from "@stricahq/cardano-codec/dist/types/ouroborosTypes";
+import { toHex, unwrapCborInCbor } from "../utils/utils";
 
-const intersectFound = function (msg: any) {
-  let point: Point = {};
-  if (msg.point.length > 0) {
-    point = {
-      slot: msg.point[0],
-      hash: msg.point[1].toString("hex"),
-    };
+// point = [] (origin) / [slot, hash]
+const toPoint = (node: CborNode | undefined): Point => {
+  if (node?.kind !== "array") {
+    throw new Error("Invalid point");
   }
-  const tip: Tip = {
-    hash: msg.tip[0][1].toString("hex"),
-    slot: msg.tip[0][0],
-  };
-
-  return {
-    intersectFound: {
-      point,
-      tip,
-    },
-  };
-};
-
-const intersectNotFound = function (msg: any) {
-  const tip: Tip = {
-    hash: msg.tip[0][1].toString("hex"),
-    slot: msg.tip[0][0],
-  };
-  return {
-    intersectNotFound: {
-      tip,
-    },
-  };
-};
-
-const rollForward = function (msg: any): NodeToClientChainSyncResponse {
-  const blockCbor: Buffer = msg.block.value;
-
-  const tip: Tip = {
-    hash: msg.tip[0][1].toString("hex"),
-    slot: msg.tip[0][0],
-  };
-
-  return {
-    rollForward: {
-      block: blockCbor,
-      tip,
-    },
-  };
-};
-
-const rollBackward = function (msg: any) {
-  let point: Point = {};
-  if (msg.point.length > 0) {
-    point = { slot: msg.point[0], hash: msg.point[1].toString("hex") };
+  if (node.items?.length === 0) {
+    return {};
   }
-  const tip: Tip = {
-    hash: msg.tip[0][1].toString("hex"),
-    slot: msg.tip[0][0],
-  };
-
+  const slot = node.at(0);
+  const hash = node.at(1);
+  if (slot === undefined || hash === undefined) {
+    throw new Error("Invalid point");
+  }
   return {
-    rollBackward: {
-      point,
-      tip,
-    },
+    slot: slot.toJS(),
+    hash: toHex(hash.toJS()),
   };
 };
 
-export const chainSyncResponse = (payload: any): NodeToClientChainSyncResponse => {
-  let result: NodeToClientChainSyncResponse;
-  switch (payload[0]) {
+// tip = [point, blockNo]
+const toTip = (node: CborNode | undefined): Tip => {
+  const { slot, hash } = toPoint(node?.at(0));
+  if (slot === undefined || hash === undefined) {
+    throw new Error("Invalid tip");
+  }
+  return { slot, hash };
+};
+
+export const chainSyncResponse = (payload: CborNode): NodeToClientChainSyncResponse => {
+  switch (payload.at(0)?.toJS()) {
     case 1:
-      result = {
+      return {
         await: true,
       };
-      break;
     case 2:
-      result = rollForward({
-        block: payload[1],
-        tip: payload[2],
-      });
-      break;
+      return {
+        rollForward: {
+          block: unwrapCborInCbor(payload.at(1)),
+          tip: toTip(payload.at(2)),
+        },
+      };
     case 3:
-      result = rollBackward({
-        point: payload[1],
-        tip: payload[2],
-      });
-      break;
+      return {
+        rollBackward: {
+          point: toPoint(payload.at(1)),
+          tip: toTip(payload.at(2)),
+        },
+      };
     case 5:
-      result = intersectFound({
-        point: payload[1],
-        tip: payload[2],
-      });
-      break;
+      return {
+        intersectFound: {
+          point: toPoint(payload.at(1)),
+          tip: toTip(payload.at(2)),
+        },
+      };
     case 6:
-      result = intersectNotFound({
-        tip: payload[1],
-      });
-      break;
+      return {
+        intersectNotFound: {
+          tip: toTip(payload.at(1)),
+        },
+      };
     default:
       throw new Error("Protocol is not implemented");
   }
-  return result;
 };
 
 export default chainSyncResponse;
