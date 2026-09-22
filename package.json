@@ -1,6 +1,6 @@
 {
   "name": "@stricahq/ouroboros-network-js",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Javascript implementation of the Cardano Ouroboros networking protocol",
   "type": "module",
   "types": "./dist/index.d.ts",
